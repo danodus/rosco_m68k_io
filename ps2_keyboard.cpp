@@ -144,7 +144,7 @@ void PS2Keyboard::begin(uint8_t clk_pin, uint8_t data_pin) {
   g_clk_pin = clk_pin;
   g_data_pin = data_pin;
 
-  // initialize the mouse
+  // initialize the keyboard
   pull_high(clk_pin);
   pull_high(data_pin);
   delay(20);
