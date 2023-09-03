@@ -9,18 +9,10 @@
 
 class PS2Mouse
 {
-
-  static void pull_low(int pin);
-  static void pull_high(int pin);
-
-  static int read_bit();
-  static uint8_t read_byte();
-  static void write_byte(uint8_t data);
-
 public:
   PS2Mouse();
 
-  static void begin(uint8_t clk_pin, uint8_t data_pin);
+  static void begin(int clk_pin, int data_pin);
   static uint8_t read(bool *avail, bool *buffer_overflow);
 };
 
