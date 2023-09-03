@@ -24,8 +24,6 @@ This is an Arduino-based keyboard and mouse interface for the rosco_m68k. It use
 A paint program for the rosco_m68k is available here https://github.com/danodus/XoseraLab/tree/main/paint.
 The cursor can be moved with the mouse and the arrow keys.
 
-Note: This example does not support the secondary serial port.
-
 ## Serial Protocol
 
 Currently, the serial data stream is only from the Arduino to the rosco_m68k.
