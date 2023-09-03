@@ -9,6 +9,14 @@
 
 class PS2Keyboard
 {
+
+  static void pull_low(int pin);
+  static void pull_high(int pin);
+
+  static int read_bit();
+  static uint8_t read_byte();
+  static void write_byte(uint8_t data);
+
 public:
   PS2Keyboard();
 
