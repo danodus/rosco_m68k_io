@@ -12,7 +12,7 @@ PS2Mouse mouse;
 
 void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
-#if SERIAL_ECHO_ENA  
+#if ARDUINO_MEGA  
   Serial1.begin(SERIAL_BAUD_RATE);
 #endif
 
