@@ -1,7 +1,7 @@
 #define ARDUINO_MEGA 1      // 0 for Arduino Uno, 1 for Arduino Mega
 
 // Serial port
-#define SERIAL_BAUD_RATE 9600
+#define SERIAL_BAUD_RATE 115200
 
 // Enabled features
 #if ARDUINO_MEGA
@@ -11,6 +11,8 @@
 #endif
 #define KEYBOARD_ENA 1
 #define MOUSE_ENA 1
+
+#define INITIAL_MODE MODE_ASCII // MODE_ASCII or MODE_PS2
 
 // Pinout
 #define PS2_MOUSE_CLK_PIN 2
