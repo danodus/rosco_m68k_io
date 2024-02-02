@@ -7,14 +7,16 @@
 
 #include "config.h"
 
-#define CMD_IDENT     0xf0
-#define CMD_ACK       0xff
-#define CMD_NACK      0x00
-#define CMD_MODE_SET  0x10
+#define CMD_IDENT       0xf0
+#define CMD_ACK         0xff
+#define CMD_NACK        0x00
+#define CMD_MODE_SET    0x10
+#define CMD_MODE_EMUTOS 0x11
 
-#define MODE_SCANCODE 0x00  // not supported
-#define MODE_ASCII    0x01
-#define MODE_PS2      0x80
+#define MODE_SCANCODE   0x00  // not supported
+#define MODE_ASCII      0x01
+#define MODE_PS2        0x80
+#define MODE_EMUTOS     0x81
 
 PS2Keyboard keyboard;
 PS2Mouse mouse;
@@ -84,6 +86,18 @@ void echo_serial() {
 }
 #endif // SERIAL_ECHO_ENA
 
+//send relative reporting packet
+void send_emutos_mouse(char x, char y, bool left, bool right)
+{
+  byte a=0xFF;
+  a=bitClear(a,2);
+  a=bitWrite(a,1,left);
+  a=bitWrite(a,0,right);
+  send_byte(a);
+  send_byte(x);
+  send_byte(y);
+}
+
 void loop() {
 
   bool avail, buffer_overflow;
@@ -106,12 +120,14 @@ void loop() {
       do {
         c = recv_byte(&avail);
       } while (!avail);
-      if (c == MODE_ASCII || c == MODE_PS2) {
+      if (c == MODE_ASCII || c == MODE_PS2 || c == MODE_EMUTOS) {
         mode = c;
         send_byte(CMD_ACK);
       } else {
         send_byte(CMD_NACK);  // unknown or unsupported mode
       }
+    } else if (c == CMD_MODE_EMUTOS) {
+      mode = MODE_EMUTOS;
     } else {
 #if SERIAL_ECHO_ENA
       // echo to port 0
@@ -155,7 +171,7 @@ void loop() {
   // Mouse
   //
 
-  if (mode == MODE_PS2) {
+  if (mode == MODE_PS2 || mode == MODE_EMUTOS) {
     uint8_t mstat, mx, my;
     mstat = mouse.read(&avail, &buffer_overflow);
     if (buffer_overflow)
@@ -172,10 +188,15 @@ void loop() {
           Serial.println("Mouse buffer overflow");
       } while (!avail);
 
-      send_byte('M');
-      send_byte(mstat);
-      send_byte(mx);
-      send_byte(my);
+      if (mode == MODE_PS2) {
+        send_byte('M');
+        send_byte(mstat);
+        send_byte(mx);
+        send_byte(my);
+      } else {
+        send_byte('M');
+        send_emutos_mouse(mx, -my, bitRead(mstat, 0), bitRead(mstat, 1));
+      }
     }
   }
 #endif // MOUSE_ENA
