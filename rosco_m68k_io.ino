@@ -7,21 +7,44 @@
 
 #include "config.h"
 
-#define CMD_IDENT       0xf0
-#define CMD_ACK         0xff
-#define CMD_NACK        0x00
-#define CMD_MODE_SET    0x10
-#define CMD_MODE_EMUTOS 0x11
+// Commands
+#define CMD_LED_POWRED      0x1
+#define CMD_LED_POWGRN      0x2
+#define CMD_LED_POWBLU      0x3
+#define CMD_LED_CAPS        0x4
+#define CMD_LED_DISK        0x5
+#define CMD_LED_EXTRED      0x6
+#define CMD_LED_EXTGRN      0x7
+#define CMD_LED_EXTBLU      0x8
 
-#define MODE_SCANCODE   0x00  // not supported
-#define MODE_ASCII      0x01
-#define MODE_PS2        0x80
-#define MODE_EMUTOS     0x81
+#define CMD_IDENT           0xf0
+#define CMD_RESET           0xf1
+
+#define CMD_MODE_SET        0x10
+#define CMD_RPT_DELAY_SET   0x11
+#define CMD_RPT_RATE_SET    0x12
+
+#define CMD_MOUSE_DETECT    0x20
+#define CMD_MOUSE_STRM_ON   0x21
+#define CMD_MOUSE_STRM_OFF  0x22
+#define CMD_MOUSE_REPORT    0x23
+#define CMD_MOUSE_SET_RATE  0x24
+#define CMD_MOUSE_SET_RES   0x25
+#define CMD_MOUSE_SET_SCALE 0x26
+
+#define CMD_ACK             0xff
+#define CMD_NACK            0x00
+
+#define MODE_SCAN           0x00
+#define MODE_ASCII          0x01
+#define MODE_PS2            0x80
 
 PS2Keyboard keyboard;
 PS2Mouse mouse;
 
 int mode = INITIAL_MODE;
+bool mouse_stream_ena = false;
+uint8_t mstat = 0, mx = 0, my = 0;
 
 void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
@@ -86,18 +109,6 @@ void echo_serial() {
 }
 #endif // SERIAL_ECHO_ENA
 
-//send relative reporting packet
-void send_emutos_mouse(char x, char y, bool left, bool right)
-{
-  byte a=0xFF;
-  a=bitClear(a,2);
-  a=bitWrite(a,1,left);
-  a=bitWrite(a,0,right);
-  send_byte(a);
-  send_byte(x);
-  send_byte(y);
-}
-
 void loop() {
 
   bool avail, buffer_overflow;
@@ -115,23 +126,81 @@ void loop() {
       send_byte(0);   // reserved 2
       send_byte(CMD_ACK);
     } else if (c == CMD_MODE_SET) {
-      Serial.println("CMD SET---");
       send_byte(CMD_ACK);
       do {
         c = recv_byte(&avail);
       } while (!avail);
-      if (c == MODE_ASCII || c == MODE_PS2 || c == MODE_EMUTOS) {
+      if (c == MODE_ASCII || c == MODE_SCAN || c == MODE_PS2) {
         mode = c;
+        Serial.print("Mode set to ");
+        if (mode == MODE_ASCII) {
+          Serial.println("ASCII");
+        } else if (mode == MODE_SCAN) {
+          Serial.println("SCAN");
+        } else {
+          Serial.println("PS2");
+        }
         send_byte(CMD_ACK);
       } else {
         send_byte(CMD_NACK);  // unknown or unsupported mode
       }
-    } else if (c == CMD_MODE_EMUTOS) {
-      mode = MODE_EMUTOS;
+    } else if (c == CMD_LED_DISK) {
+      send_byte(CMD_ACK);
+      do {
+        c = recv_byte(&avail);
+      } while (!avail);
+      if (c == 0x00 || c == 0x01) {
+        Serial.print("Disk LED ");
+        if (c == 0x00) {
+          Serial.println("OFF");
+        } else if (c == 0x01) {
+          Serial.println("ON");
+          send_byte(CMD_ACK);
+        } else {
+          send_byte(CMD_NACK);
+        }
+      }     
+    } else if (c == CMD_RESET) {
+      Serial.println("Reset");
+      mode = MODE_ASCII;
+      send_byte(CMD_ACK);
+    } else if (c == CMD_MOUSE_DETECT) {
+      Serial.println("Mouse detect query");
+#if MOUSE_ENA
+      send_byte(CMD_ACK);
+#else // MOUSE_ENA
+      send_byte(CMD_NACK);
+#endif // MOUSE_ENA
+    } else if (c == CMD_MOUSE_STRM_ON) {
+      Serial.println("Mouse stream ON");
+      mouse_stream_ena = true;
+      send_byte(CMD_ACK);
+    } else if (c == CMD_MOUSE_STRM_OFF) {
+      Serial.println("Mouse stream OFF");
+      mouse_stream_ena = false;
+      send_byte(CMD_ACK);
+    } else if (c == CMD_MOUSE_REPORT) {
+#if MOUSE_ENA
+      send_byte(CMD_ACK);
+      send_byte(0x60);
+      send_byte(mstat);
+      send_byte(mstat & 0x10 ? -mx : mx);
+      send_byte(mstat & 0x20 ? -my : my);
+      send_byte(0x00); // TODO
+      send_byte(CMD_ACK);
+      mx = 0;
+      my = 0;
+#else // MOUSE_ENA
+      send_byte(CMD_NACK);
+#endif // MOUSE_ENA
+
     } else {
 #if SERIAL_ECHO_ENA
       // echo to port 0
       Serial.write(c);
+#else // SERIAL_ECHO_ENA
+      Serial.println("Unknown command received!");
+      send_byte(CMD_NACK);
 #endif // SERIAL_ECHO_ENA
     }
   }
@@ -163,6 +232,13 @@ void loop() {
 
     if (c)
       send_byte(c);
+  } else if (mode == MODE_SCAN) {
+    uint8_t s = keyboard.read_rosco(&buffer_overflow);
+    if (buffer_overflow)
+      Serial.println("Keyboard buffer overflow");
+
+    if (s)
+      send_byte(s);
   }
 #endif // KEYBOARD_ENA
 
@@ -171,31 +247,42 @@ void loop() {
   // Mouse
   //
 
-  if (mode == MODE_PS2 || mode == MODE_EMUTOS) {
-    uint8_t mstat, mx, my;
-    mstat = mouse.read(&avail, &buffer_overflow);
+  if (mode == MODE_PS2 || mode == MODE_SCAN) {
+
+    uint8_t tmp_mstat = 0, tmp_mx = 0, tmp_my = 0;
+
+    tmp_mstat = mouse.read(&avail, &buffer_overflow);
     if (buffer_overflow)
       Serial.println("Mouse buffer overflow");
     if (avail) {
       do {
-        mx = mouse.read(&avail, &buffer_overflow);
+        tmp_mx = mouse.read(&avail, &buffer_overflow);
         if (buffer_overflow)
           Serial.println("Mouse buffer overflow");
       } while (!avail);
       do {
-        my = mouse.read(&avail, &buffer_overflow);
+        tmp_my = mouse.read(&avail, &buffer_overflow);
         if (buffer_overflow)
           Serial.println("Mouse buffer overflow");
       } while (!avail);
+
+      mstat = tmp_mstat;
+      mx = tmp_mx;
+      my = tmp_my;
 
       if (mode == MODE_PS2) {
         send_byte('M');
         send_byte(mstat);
         send_byte(mx);
         send_byte(my);
-      } else {
-        send_byte('M');
-        send_emutos_mouse(mx, -my, bitRead(mstat, 0), bitRead(mstat, 1));
+      } else if (mode == MODE_SCAN) {
+        if (mouse_stream_ena) {
+          send_byte(0x60);
+          send_byte(mstat);
+          send_byte(mstat & 0x10 ? -mx : mx);
+          send_byte(mstat & 0x20 ? -my : my);
+          send_byte(0x00); // TODO
+        }
       }
     }
   }

@@ -14,6 +14,8 @@ static volatile uint8_t g_head, g_tail;
 static volatile bool g_buffer_overflow;
 static int g_clk_pin, g_data_pin;
 
+static uint8_t g_device_type;
+
 static void clk_interrupt(void) {
   static uint8_t bitcount = 0;
   static uint8_t incoming = 0;
@@ -70,6 +72,7 @@ uint8_t PS2Mouse::read(bool *avail, bool *buffer_overflow) {
   return c;
 }
 
+
 void PS2Mouse::begin(int clk_pin, int data_pin) {
 
   g_clk_pin = clk_pin;
@@ -86,7 +89,7 @@ void PS2Mouse::begin(int clk_pin, int data_pin) {
   ps2_read_byte(clk_pin, data_pin);         // ignore
   delay(20);
   ps2_write_byte(clk_pin, data_pin, 0xf4);  // enable data reporting
-  ps2_read_byte(clk_pin, data_pin);         // read ack
+  g_device_type = ps2_read_byte(clk_pin, data_pin);         // read ack
   delayMicroseconds(100);
   ps2_pull_high(clk_pin);
   ps2_pull_high(data_pin);  

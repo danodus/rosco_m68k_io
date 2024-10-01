@@ -15,6 +15,7 @@ public:
   static void begin(int clk_pin, int data_pin);
   static uint8_t read(bool *avail, bool *buffer_overflow);
   static char read_ascii(bool *buffer_overflow);
+  static uint8_t read_rosco(bool *buffer_overflow);
 };
 
 #endif // PS2_KEYBOARD_H

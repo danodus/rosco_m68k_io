@@ -9,6 +9,7 @@
 #include "ps2_keyboard.h"
 
 #include "ps2.h"
+#include "ps2_rosco.h"
 
 #define BUFFER_SIZE 128
 
@@ -160,6 +161,39 @@ char PS2Keyboard::read_ascii(bool *buffer_overflow) {
         if (code < KEYMAP_SIZE)
             c = g_keymap[code + KEYMAP_SIZE * (control << 1 | shift)];
         return c;
+      } else {
+        // not blocking
+        break;
+      }
+    }
+
+    // no character available
+    return 0;
+}
+
+uint8_t PS2Keyboard::read_rosco(bool *buffer_overflow) {
+  static bool brk = false, modifier = false;
+  for (;;) {
+    // if character available
+    uint8_t code;
+    bool avail;
+    code = read(&avail, buffer_overflow);
+    if (avail) {
+        if (code == 0xAA) { // BAT completion code
+          continue; 
+        }
+        if (code == 0xF0) {
+          brk = true;
+          continue;
+        }
+        if (code == 0xE0) {
+          modifier = true;
+          continue;
+        }        
+        code = ps2_to_rosco_scancode(!brk, modifier, code);
+        brk = false;
+        modifier = false;
+        return code;
       } else {
         // not blocking
         break;
