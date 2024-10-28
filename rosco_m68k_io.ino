@@ -144,13 +144,13 @@ void loop() {
       } else {
         send_byte(CMD_NACK);  // unknown or unsupported mode
       }
-    } else if (c == CMD_LED_DISK) {
+    } else if (c == CMD_LED_POWRED || c == CMD_LED_POWGRN || c == CMD_LED_POWBLU || c == CMD_LED_DISK) {
       send_byte(CMD_ACK);
       do {
         c = recv_byte(&avail);
       } while (!avail);
       if (c == 0x00 || c == 0x01) {
-        Serial.print("Disk LED ");
+        Serial.print("LED ");
         if (c == 0x00) {
           Serial.println("OFF");
         } else if (c == 0x01) {
